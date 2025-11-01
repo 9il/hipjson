@@ -56,15 +56,60 @@ void main()
 }
 ```
 
+## Streaming API
+
+HipJSON also supports parsing JSON in stream. A following example:
+```d
+import hip.data.json;
+import std.exception;
+JSONValue myJson;
+JSONParseState state = JSONParseState.initialize(0);
+enforce(JSONValue.parseStream(myJson, state, `{`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `h`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `e`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `l`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `l`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `o`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `:`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, ` `) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `w`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `o`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `r`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `l`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `d`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+enforce(JSONValue.parseStream(myJson, state, `}`) != JSONValue.IncompleteStream);
+import std.stdio;
+writeln(myJson);
+```
+
+Of course this is only an example of how it works. It is best suited to be used together with a fetch API.
+Also, setting a good initial size for the internal string pool makes the JSON parser way faster. It's default is to use 75% of the mentioned data size to use it. So if you can query the size before parsing the stream, it is a big win as the data won't be fragmented and intermediary allocations won't happen:
+
+```d
+JSONValue myJson;
+JSONParseState state = JSONParseState.initialize(querySize("someapi.com/a/json")); // or std.file.getSize
+char[4096] buffer;
+while(fetch("someapi.com/a/json", buffer)) //or file.byChunk
+{
+    if(JSONValue.parseStream(myJson, state, buffer) != JSONValue.IncompleteStream)
+        break;
+}
+//Your json has finished parsing
+```
+
 
 ### Testing
 
 With `dub -c test -b release-debug --compiler=ldc2`:
 ```
-STD JSON: 336 ms, 836 μs, and 6 hnsecs (50000 Tests)
-JSONPIPE: 206 ms and 571 μs (50000 Tests)
-MIR JSON: 266 ms, 770 μs, and 7 hnsecs (50000 Tests)
-HipJSON: 86 ms, 881 μs, and 8 hnsecs (50000 Tests)
+STD JSON: 330 ms, 592 μs, and 1 hnsec (50000 Tests)
+JSONPIPE: 209 ms, 604 μs, and 3 hnsecs (50000 Tests)
+MIR JSON: 259 ms, 756 μs, and 1 hnsec (50000 Tests)
+HipJSON: 78 ms, 604 μs, and 5 hnsecs (50000 Tests)
 ```
 
 HipJSON is currently optimized with d-segmented-hashmap, which makes it get a much faster parsing speed as it never rehashes its dictionaries.

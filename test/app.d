@@ -37,6 +37,30 @@ void main()
 {
 	import std.datetime.stopwatch;
 
+	import hip.data.json;
+	import std.exception;
+	JSONValue myJson;
+	JSONParseState state = JSONParseState.initialize(0);
+	enforce(JSONValue.parseStream(myJson, state, `{`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `h`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `e`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `l`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `l`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `o`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `:`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, ` `) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `w`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `o`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `r`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `l`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `d`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `"`) == JSONValue.IncompleteStream);
+	enforce(JSONValue.parseStream(myJson, state, `}`) != JSONValue.IncompleteStream);
+	import std.stdio;
+	writeln(myJson);
 
 
 	StopWatch timeStd = StopWatch(AutoStart.yes);

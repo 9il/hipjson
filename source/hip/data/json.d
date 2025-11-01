@@ -3,7 +3,7 @@ import hip.util.shashmap;
 
 JSONValue parseJSON(const(char)[] jsonData)
 {
-    JSONParseState state = JSONParseState.initialize(jsonData);
+    JSONParseState state = JSONParseState.initialize(jsonData.length);
 	JSONValue output;
 	if(JSONValue.parseStream(output, state, jsonData, true) == JSONValue.IncompleteStream)
 		return JSONValue.errorObj("Incomplete stream when trying to parse complete JSONValue.");
@@ -198,12 +198,11 @@ struct JSONParseState
 		ptrdiff_t index;
 		ptrdiff_t totalParsedIndex;
 		string lastKey;
-
 		StringBuffer partial;
 	}
 
 
-	static JSONParseState initialize(const char[] data) @trusted
+	static JSONParseState initialize(size_t dataLength = 0) @trusted
 	{
 		import std.array;
 		JSONParseState ret = void;
@@ -212,7 +211,7 @@ struct JSONParseState
 		ret.state = JSONState.value;
 		ret.lastValue = ret.main;
 		// ret.pool = StringPool(data.length == 0 ? StringBuffer.staticStorage.sizeof : cast(size_t)(data.length*0.75));
-		ret.pool = StringPool(cast(size_t)(data.length*0.75));
+		ret.pool = StringPool(dataLength == 0 ? StringBuffer.staticStorage.sizeof : cast(size_t)(dataLength*0.75));
 		ret.stack = uninitializedArray!(JSONValue[])(32);
 		ret.stackLength = 0;
 		ret.line = 0;
@@ -227,7 +226,6 @@ struct JSONParseState
 	{
 		if(isFullParse)
 			return;
-		import std.stdio;
 		if(index != 0)
 		{
 			partial.free(index);
@@ -1004,10 +1002,10 @@ private struct StringBuffer
 	void appendData(const(char)[] data)
 	{
 		size_t newSize = usedSize + data.length;
-		if(newSize > staticStorage.length)
+		if(dynamicStorage.length || newSize > staticStorage.length)
 		{
 			size_t oldDyn = dynamicStorage.length;
-			if(newSize > oldDyn)
+			if(newSize > dynamicStorage.length)
 				dynamicStorage.length = newSize;
 			if(oldDyn == 0)
 				dynamicStorage[0..usedSize] = staticStorage[0..usedSize];
@@ -1025,8 +1023,6 @@ private struct StringBuffer
 	void free(size_t freeSize)
 	{
 		import core.stdc.string;
-		import std.stdio;
-		writeln("Free: ", freeSize);
 		if(freeSize == 0)
 			return;
 		else if(freeSize >= usedSize)
@@ -1035,15 +1031,11 @@ private struct StringBuffer
 			return;
 		}
 		size_t remaining = usedSize - freeSize;
-		if(remaining <= staticStorage.length)
-		{
-			if(usedSize <= staticStorage.length)
-				memmove(staticStorage.ptr, staticStorage.ptr+freeSize, remaining);
-			else
-				memcpy(dynamicStorage.ptr, staticStorage.ptr+freeSize, remaining);
-		}
-		else
+		if(dynamicStorage.length)
 			memmove(dynamicStorage.ptr, dynamicStorage.ptr+freeSize, remaining);
+		else
+			memmove(staticStorage.ptr, staticStorage.ptr+freeSize, remaining);
+
 		usedSize = remaining;
 
 	}
@@ -1056,10 +1048,9 @@ private struct StringBuffer
 
 	scope const(char)[] getData()
 	{
-		if(usedSize > staticStorage.length)
-			return dynamicStorage;
-		else
-			return staticStorage[0..usedSize];
+		if(dynamicStorage.length)
+			return dynamicStorage[0..usedSize];
+		return staticStorage[0..usedSize];
 	}
 }
 
@@ -1227,93 +1218,77 @@ private char escapedCharacter(char a)
 	}
 }
 
-// unittest
-// {
-// 	assert(parseJSON(`
-// 	{
-//     "name": "redub",
-//     "description": "Dub Based Build System, with parallelization per packages and easier to contribute",
-//     "authors": ["Hipreme"],
-//     "targetPath": "build",
-//     "buildOptions": [
-//         "debugInfo",
-//         "debugInfoC",
-//         "debugMode"
-//     ],
-//     "configurations": [
-//         {
-//             "name": "cli",
-//             "targetType": "executable"
-//         },
-//         {
-//             "name": "library",
-//             "targetType": "staticLibrary",
-//             "excludedSourceFiles": ["source/app.d"]
-//         }
-//     ],
-//     "license": "MIT",
-//     "dependencies": {
-//         "semver": {"path": "semver"},
-//         "colorize": {"path": "colorize"},
-//         "adv_diff": {"path": "adv_diff"},
-//         "hipjson": {"path": "hipjson"},
-//         "xxhash3": "~>0.0.5"
-//     }
-
-// }`).object["configurations"].array.length == 2);
-
-// }
-
-// unittest
-// {
-// 	enum json = `
-// {
-//     "D5F04185E96CC720": [
-//         [
-// 			"First Value"
-//         ],
-//         [
-// 			"Second Value"
-//         ]
-//     ]
-// }`;
-// 	assert(parseJSON(json)["D5F04185E96CC720"].array[1].array[0].toString == `"Second Value"`);
-// }
 unittest
 {
-	enum path = `C:\Users\Marcelo\AppData\Local\dub\dump.json`;
+	assert(parseJSON(`
+	{
+    "name": "redub",
+    "description": "Dub Based Build System, with parallelization per packages and easier to contribute",
+    "authors": ["Hipreme"],
+    "targetPath": "build",
+    "buildOptions": [
+        "debugInfo",
+        "debugInfoC",
+        "debugMode"
+    ],
+    "configurations": [
+        {
+            "name": "cli",
+            "targetType": "executable"
+        },
+        {
+            "name": "library",
+            "targetType": "staticLibrary",
+            "excludedSourceFiles": ["source/app.d"]
+        }
+    ],
+    "license": "MIT",
+    "dependencies": {
+        "semver": {"path": "semver"},
+        "colorize": {"path": "colorize"},
+        "adv_diff": {"path": "adv_diff"},
+        "hipjson": {"path": "hipjson"},
+        "xxhash3": "~>0.0.5"
+    }
+
+}`).object["configurations"].array.length == 2);
+
+}
+
+unittest
+{
+	enum json = `
+{
+    "D5F04185E96CC720": [
+        [
+			"First Value"
+        ],
+        [
+			"Second Value"
+        ]
+    ]
+}`;
+	assert(parseJSON(json)["D5F04185E96CC720"].array[1].array[0].toString == `"Second Value"`);
+}
+
+
+
+unittest
+{
+	enum path = `testJson.json`;
 	enum tests = 1;
 	import core.memory;
 	import std.datetime.stopwatch;
 	import std.file;
 	import std.stdio;
 
+	string file = readText(path);
 	auto res = benchmark!(()
 	{
-		File file = File(path, "r");
-		JSONParseState state = JSONParseState.initialize(null);
-		JSONValue v;
-		char[] tempBuffer;
-		size_t i;
-		foreach(ubyte[] buffer; file.byChunk(4096))
-		{
-			i++;
-			auto res = JSONValue.parseStream(v, state, cast(char[])buffer);
-			if(res.hasErrorOccurred)
-			{
-				import std.stdio;
-				writeln("Found");
-				writeln = v;
-				writeln = res;
-				break;
-			}
-			// tempBuffer = cast(char[])buffer;
-		}
-		writeln = v;
-		// writeln = i;
+		parseJSON(file);
 	})(tests);
 
-	size_t bytesRead = std.file.getSize(path) * tests;
+	size_t bytesRead = file.length * tests;
 
 
 	writeln("Parsed: ", bytesRead / 1_000_000, " MB");
@@ -1326,33 +1301,3 @@ unittest
 	writeln("Collection Count: ", GC.profileStats.numCollections);
 	writeln("Collection Time: ", GC.profileStats.totalCollectionTime);
 }
-
-
-// unittest
-// {
-// 	enum path = `C:\Users\Marcelo\AppData\Local\dub\dump.json`;
-// 	enum tests = 1;
-// 	import core.memory;
-// 	import std.datetime.stopwatch;
-// 	import std.file;
-// 	import std.stdio;
-
-// 	string file = readText(path);
-// 	auto res = benchmark!(()
-// 	{
-// 		parseJSON(file);
-// 	})(tests);
-
-// 	size_t bytesRead = file.length * tests;
-
-
-// 	writeln("Parsed: ", bytesRead / 1_000_000, " MB");
-// 	writeln("Took: ", res[0].total!"msecs", "ms");
-// 	writeln("MB per Second: ", bytesRead / 1_000_000.0 / (res[0].total!"msecs" / 1000.0) );
-
-// 	writeln("Allocated: ", GC.stats.allocatedInCurrentThread / 1_000_000.0, " MB");
-// 	writeln("Free: ", GC.stats.freeSize / 1_000_000.0, " MB");
-// 	writeln("Used: ", GC.stats.usedSize / 1_000_000.0, " MB");
-// 	writeln("Collection Count: ", GC.profileStats.numCollections);
-// 	writeln("Collection Time: ", GC.profileStats.totalCollectionTime);
-// }
