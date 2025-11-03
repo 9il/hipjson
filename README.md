@@ -121,13 +121,13 @@ It also has a string buffer performance optimization which makes it even faster 
 When it is mostly strings, HipJSON is able to reach in my PC up to 735 MB per second.
 ```
 Parsed: 1528 MB
-Took: 2079ms
-MB per Second: 735.057
-Allocated: 3836.6 MB
-Free: 828.388 MB
-Used: 1185.21 MB
-Collection Count: 11
-Collection Time: 313 ms, 790 ╬╝s, and 7 hnsecs
+Took: 1779ms
+MB per Second: 859.013
+Allocated: 2969.01 MB
+Free: 740.691 MB
+Used: 1218.01 MB
+Collection Count: 9
+Collection Time: 287 ms, 386 ╬╝s, and 6 hnsecs
 ```
 
 
