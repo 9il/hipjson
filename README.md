@@ -118,7 +118,7 @@ It also has a string buffer performance optimization which makes it even faster 
 
 ## JSONs with large strings objects and strings (dub registry dump)
 
-When it is mostly strings, HipJSON is able to reach in my PC up to 735 MB per second.
+When it is mostly strings, HipJSON is able to reach in my PC up to 860 MB per second.
 ```
 Parsed: 1528 MB
 Took: 1779ms
