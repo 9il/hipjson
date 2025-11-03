@@ -191,7 +191,7 @@ struct JSONParseState
 		JSONValue* current;
 		JSONState state = JSONState.value;
 		JSONValue lastValue;
-		StringPool pool;
+		StringPoolList pool;
 		JSONValue[] stack;
 		ptrdiff_t stackLength = 0;
 		size_t line = 0;
@@ -211,7 +211,7 @@ struct JSONParseState
 		ret.state = JSONState.value;
 		ret.lastValue = ret.main;
 		// ret.pool = StringPool(data.length == 0 ? StringBuffer.staticStorage.sizeof : cast(size_t)(data.length*0.75));
-		ret.pool = StringPool(dataLength == 0 ? StringBuffer.staticStorage.sizeof : cast(size_t)(dataLength*0.75));
+		ret.pool = StringPoolList(dataLength == 0 ? StringBuffer.staticStorage.sizeof : cast(size_t)(dataLength*0.75));
 		ret.stack = uninitializedArray!(JSONValue[])(32);
 		ret.stackLength = 0;
 		ret.line = 0;
@@ -1054,6 +1054,60 @@ private struct StringBuffer
 	}
 }
 
+private struct StringPoolList
+{
+	size_t defaultPoolSizes;
+	StringPool firstPool;
+	StringPool[] pools;
+	this(size_t defaultPoolSizes)
+	{
+		this.defaultPoolSizes = defaultPoolSizes;
+		firstPool = StringPool(defaultPoolSizes);
+	}
+
+	char[] getNewString(size_t strSize)
+	{
+		char[] ret = firstPool.getNewString(strSize);
+		if(ret)
+			return ret;
+		foreach_reverse(p; pools)
+		{
+			ret = p.getNewString(strSize);
+			if(ret)
+				return ret;
+		}
+		pools.length++;
+		pools[$-1] = StringPool(strSize > defaultPoolSizes ? strSize : defaultPoolSizes);
+		return pools[$-1].getNewString(strSize);
+	}
+
+
+	char[] resizeString(char[] str, size_t newSize) @trusted
+	{
+		char[] ret = firstPool.resizeString(str, newSize);
+		if(ret)
+			return ret;
+		foreach_reverse(p; pools)
+		{
+			ret = p.resizeString(str,  newSize);
+			if(ret)
+				return ret;
+		}
+		pools.length++;
+		pools[$-1] = StringPool(newSize > defaultPoolSizes ? newSize : defaultPoolSizes);
+		ret = pools[$-1].getNewString(newSize);
+		ret[0..str.length] = str[];
+		return ret;
+	}
+
+	void trim()
+	{
+		firstPool.trim();
+		foreach(p; pools)
+			p.trim();
+	}
+}
+
 private struct StringPool
 {
 	private char[] pool;
@@ -1065,7 +1119,7 @@ private struct StringPool
 		this.pool = uninitializedArray!(char[])(size);
 	}
 
-	bool getSlice(size_t sliceSize, out char[] str)
+	private bool getSlice(size_t sliceSize, out char[] str)
 	{
 		if(used+sliceSize < pool.length)
 		{
@@ -1119,7 +1173,7 @@ private struct StringPool
 		char[] ret;
 		if(getSlice(strSize, ret))
 			return ret;
-		return new char[](strSize);
+		return null;
 	}
 
 	void trim()
