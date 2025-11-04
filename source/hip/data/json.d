@@ -10,8 +10,15 @@ JSONValue parseJSON(const(char)[] jsonData)
 	return output;
 }
 
-version(AArch64)
-	version = UseDHashMap;
+version(Have_intel_intrinsics)
+{
+	static if(__traits(targetHasFeature, "avx2"))
+		private enum SimdOps = 32;
+	else
+		private enum SimdOps = 16;
+}
+else
+	private enum SimdOps = 0;
 
 version(UseDHashMap)
 	alias JSONObject = JSONValue[string];
@@ -234,45 +241,134 @@ struct JSONParseState
 		}
 		data = partial.getData(data);
 	}
-
-
-	private bool getNextString(const char[] data, ptrdiff_t currentIndex, out ptrdiff_t newIndex, out string theString) @trusted
+	private bool getNextString(const char[] data, ptrdiff_t startIndex, out ptrdiff_t newIndex, out string theString) @trusted
 	{
-		assert(data[currentIndex] == '"', "getNextString must start with a quotation mark");
-		ptrdiff_t i = currentIndex + 1;
+		assert(data[startIndex] == '"', "getNextString must start with a quotation mark");
+		static if(SimdOps == 32)
+		{
+			import inteli.avx2intrin;
+			alias bytes = byte32;
+			alias intrep = long4;
+			alias loadUnaligned = _mm256_loadu_si256;
+			alias moveMask = _mm256_movemask_epi8;
+			enum byte32 quoteMask = [0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,];
+			enum byte32 backslashMask = [0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,];
+		}
+		else static if(SimdOps == 16)
+		{
+			import inteli.smmintrin;
+			alias bytes = byte16;
+			alias intrep = int4;
+			alias loadUnaligned = _mm_loadu_si128;
+			alias moveMask = _mm_movemask_epi8;
+			enum byte16 quoteMask = [0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,];
+			enum byte16 backslashMask = [0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,];
+		}
 		size_t returnLength = 0;
+		ptrdiff_t i = startIndex + 1;
 		char[] ret = pool.getNewString(64);
 		char ch;
-
-		loop: while(i < data.length)
+		static if(SimdOps > 0)
 		{
-			foreach(_; 0..32)
+			size_t copied = 0;
+			ptrdiff_t startOffset = startIndex+1;
+			while(i + SimdOps <= data.length)
 			{
-				ch = data.ptr[i];
-				switch(ch)
-				{
-					case '"':
-						ret = pool.resizeString(ret, returnLength);
-						newIndex = i;
-						theString = cast(string)ret;
-						return true;
-					case '\\':
-						if(i + 1 >= data.length)
-							break loop;
-						ch = escapedCharacter(data[++i]);
-						break;
-					default: break;
+				import core.bitop;
+				bytes chunk = cast(bytes)loadUnaligned(cast(bytes*)(data.ptr + i));
+				int backslashCmp = moveMask(cast(intrep)(chunk == backslashMask));
+				int quoteCmp = -1;
+				int quoteOffset = -1;
 
+				if(backslashCmp != 0)
+				{
+					quoteCmp = moveMask(cast(intrep)(chunk == quoteMask));
+					int firstSlash = bsf(backslashCmp);
+					if(quoteCmp != 0)
+						quoteOffset = bsf(quoteCmp);
+					if(quoteOffset == -1 || firstSlash < quoteOffset)
+					{
+						if(returnLength + SimdOps > ret.length)
+							ret = pool.resizeString(ret, returnLength*2);
+						returnLength+= firstSlash;
+						i+= firstSlash;
+						ret[copied..returnLength] = data[startOffset..i];
+						for(int idx = firstSlash; idx < SimdOps; idx++)
+						{
+							ch = data[i];
+							switch(ch)
+							{
+								case '"':
+									ret = pool.resizeString(ret, returnLength);
+									newIndex = i;
+									theString = cast(string)ret;
+									return true;
+								case '\\':
+									if(i + 1 >= data.length)
+										goto fail;
+									ch = escapedCharacter(data[++i]);
+									idx++;
+									break;
+								default: break;
+
+							}
+							ret[returnLength++] = ch;
+							i++;
+						}
+						copied = returnLength;
+						startOffset = i;
+						continue;
+					}
 				}
-				ret[returnLength++] = ch;
-				i++;
-				if(i == data.length)
-					break loop;
+				else
+				{
+					quoteCmp = moveMask(cast(intrep)(chunk == quoteMask));
+					if(quoteCmp != 0)
+						quoteOffset = bsf(quoteCmp);
+				}
+				if(quoteOffset != -1)
+				{
+					i+= quoteOffset;
+					returnLength+= quoteOffset;
+					ret = pool.resizeString(ret, returnLength);
+					ret[copied..returnLength] = data[startOffset.. i];
+					newIndex = i;
+					theString = cast(string)ret;
+					return true;
+				}
+				i+= SimdOps;
+				returnLength+= SimdOps;
+			}
+			if(returnLength > ret.length)
+				ret = pool.resizeString(ret, returnLength*2);
+			ret[copied..returnLength] = data[startOffset..i];
+		}
+
+		while(i < data.length)
+		{
+			ch = data.ptr[i];
+			switch(ch)
+			{
+				case '"':
+					ret = pool.resizeString(ret, returnLength);
+					newIndex = i;
+					theString = cast(string)ret;
+					return true;
+				case '\\':
+					if(i + 1 >= data.length)
+						goto fail;
+					ch = escapedCharacter(data[++i]);
+					break;
+				default: break;
+
 			}
 			if(returnLength >= ret.length)
-				ret = pool.resizeString(ret, ret.length*2);
+				ret = pool.resizeString(ret, returnLength*2);
+			ret[returnLength++] = ch;
+			i++;
 		}
-		newIndex = i;
+		fail:
+		newIndex = startIndex;
 		pool.resizeString(ret, 0);
 
 		return false;
@@ -1329,8 +1425,8 @@ unittest
 
 unittest
 {
-	enum path = `c:\Users\Marcelo\AppData\Local\dub\dump.json`;
-	enum tests = 1;
+	enum path = `testJson.json`;
+	enum tests = 10;
 	import core.memory;
 	import std.datetime.stopwatch;
 	import std.file;

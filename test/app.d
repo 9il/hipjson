@@ -1,8 +1,8 @@
 import std.stdio;
 enum jsonSource = q{
 {
-	"unicode": "こんいちは",
-    "こんにちは": "using unicode key",
+	"こんにちは": "こんにちは",
+	"preBuildCommands":["echo \"ERROR: Don't use 'dub test' to test mysql-native. Use 'run-tests' instead.\"","echo Bailing...","mkdir"],
     "hello": "oii",
     "test": "teste",
     "com,ma": "val,ue",
@@ -12,7 +12,7 @@ enum jsonSource = q{
     "strArr":  ["hello", "friend"],
     "mixedArr":  ["hello", 523, -53.23],
     "arrInArr": ["hello", [1, -2, -52.23], "again"],
-    "emptyObj": { 
+    "emptyObj": {
 
     },
     "simpleObj": {

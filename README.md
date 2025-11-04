@@ -150,3 +150,41 @@ Used: 739.962 MB
 Collection Count: 7
 Collection Time: 273 ms, 757 μs, and 5 hnsecs
 ```
+
+### SIMD results for string only json
+
+For the target JSON generated with:
+```d
+import std.stdio;
+void main()
+{
+    import std.file;
+    string data="{";
+    string str = "https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.example.org/https://www.exampl";
+    foreach(i; 0..1000_000)
+    {
+        import std.conv:to;
+        if(i != 0)
+            data~=",\n";
+        data~= "\"hello"~i.to!string~"\": \""~str~"\"";
+    }
+    data~= "}";
+
+    std.file.write("hello.json", data);
+}
+```
+I got up to 1.8GBps
+
+```
+Parsed: 2768 MB
+Took: 1460ms
+MB per Second: 1896.5
+Allocated: 3716.91 MB
+Free: 145.827 MB
+Used: 1308.89 MB
+Collection Count: 5
+Collection Time: 61 ms, 846 μs, and 7 hnsecs
+1 modules passed unittests
+```
+
+And that results I got by copying the strings inside the maps. I've done some basic tests and it gone up to 3GBps if borrowing memory was allowed.
