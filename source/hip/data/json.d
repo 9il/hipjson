@@ -12,13 +12,18 @@ JSONValue parseJSON(const(char)[] jsonData)
 
 version(Have_intel_intrinsics)
 {
-	static if(__traits(targetHasFeature, "avx2"))
-		private enum SimdOps = 32;
-	else
-		private enum SimdOps = 16;
+	version(LDC)
+	{
+		static if(__traits(targetHasFeature, "avx2"))
+			enum HasAVX2 = true;
+	}
+	enum HasSSE2 = true;
 }
 else
-	private enum SimdOps = 0;
+{
+	enum HasAVX2 = false;
+	enum HasSSE2 = false;
+}
 
 version(UseDHashMap)
 	alias JSONObject = JSONValue[string];
@@ -209,10 +214,12 @@ struct JSONParseState
 		StringBuffer partial;
 	}
 
+	private extern(C) bool function(JSONParseState* this_, const char[] data, ptrdiff_t startIndex, out ptrdiff_t newIndex, out string theString) @trusted getNextStringFn;
 
 	static JSONParseState initialize(size_t dataLength = 0) @trusted
 	{
 		import std.array;
+		import core.cpuid;
 		JSONParseState ret = void;
 		ret.main.type = JSONType.null_;
 		ret.current = &ret.main;
@@ -225,6 +232,20 @@ struct JSONParseState
 		ret.index = 0;
 		ret.totalParsedIndex = 0;
 		ret.partial = StringBuffer.get();
+		ret.getNextStringFn = null;
+
+		static if(HasAVX2)
+		{
+			if(avx2())
+				ret.getNextStringFn = cast(typeof(getNextStringFn))&(JSONParseState.getNextStringImpl!32);
+		}
+		static if(HasSSE2)
+		{
+			if(sse2() && !ret.getNextStringFn)
+				ret.getNextStringFn = cast(typeof(getNextStringFn))&(JSONParseState.getNextStringImpl!16);
+		}
+		if(!ret.getNextStringFn)
+			ret.getNextStringFn = cast(typeof(getNextStringFn))&(JSONParseState.getNextStringImpl!0);
 
 		return ret;
 	}
@@ -241,7 +262,13 @@ struct JSONParseState
 		}
 		data = partial.getData(data);
 	}
+
+	pragma(inline, true)
 	private bool getNextString(const char[] data, ptrdiff_t startIndex, out ptrdiff_t newIndex, out string theString) @trusted
+	{
+		return getNextStringFn(&this, data, startIndex, newIndex, theString);
+	}
+	private extern(C) bool getNextStringImpl(ushort SimdOps)(const char[] data, ptrdiff_t startIndex, out ptrdiff_t newIndex, out string theString) @trusted
 	{
 		assert(data[startIndex] == '"', "getNextString must start with a quotation mark");
 		static if(SimdOps == 32)
@@ -1425,7 +1452,7 @@ unittest
 
 unittest
 {
-	enum path = `testJson.json`;
+	enum path = `c:\Users\Marcelo\AppData\Local\dub\hello.json`;
 	enum tests = 10;
 	import core.memory;
 	import std.datetime.stopwatch;
