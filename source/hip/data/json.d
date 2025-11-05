@@ -24,6 +24,8 @@ version(Have_intel_intrinsics)
 		enum HasAVX2 = __traits(targetHasFeature, "avx2");
 		static assert(!__traits(targetHasFeature, "avx2"), "Do not use AVX2 as it is currently has an open bug: https://github.com/AuburnSounds/intel-intrinsics/issues/152");
 	}
+	else
+		enum HasAVX2 = false;
 	enum HasSSE2 = true;
 }
 else
@@ -1472,7 +1474,7 @@ unittest
 
 unittest
 {
-	enum path = `c:\Users\Marcelo\AppData\Local\dub\hello.json`;
+	enum path = `testJson.json`;
 	enum tests = 10;
 	import core.memory;
 	import std.datetime.stopwatch;
