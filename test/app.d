@@ -3,6 +3,8 @@ enum jsonSource = q{
 {
 	"こんにちは": "こんにちは",
 	"preBuildCommands":["echo \"ERROR: Don't use 'dub test' to test mysql-native. Use 'run-tests' instead.\"","echo Bailing...","mkdir"],
+	"description": "Dub Based Build System, with parallelization per packages and easier to contribute",
+    "authors": "Hipreme",
     "hello": "oii",
     "test": "teste",
     "com,ma": "val,ue",
@@ -96,7 +98,7 @@ void main()
 	{
         import hip.data.json;
 		auto json = parseJSON(
-			jsonSource
+			jsonSource, true
 		);
 	}
 	writeln("HipJSON: ", timeHip.peek, " (",Tests, " Tests) ");

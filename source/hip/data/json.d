@@ -21,8 +21,8 @@ version(Have_intel_intrinsics)
 {
 	version(LDC)
 	{
-		static if(__traits(targetHasFeature, "avx2"))
-			enum HasAVX2 = true;
+		enum HasAVX2 = __traits(targetHasFeature, "avx2");
+		static assert(!__traits(targetHasFeature, "avx2"), "Do not use AVX2 as it is currently has an open bug: https://github.com/AuburnSounds/intel-intrinsics/issues/152");
 	}
 	enum HasSSE2 = true;
 }
@@ -217,6 +217,7 @@ struct JSONParseState
 		size_t line = 0;
 		ptrdiff_t index;
 		ptrdiff_t totalParsedIndex;
+		ptrdiff_t lineStartIndex;
 		string lastKey;
 		StringBuffer partial;
 		bool borrowStrings;
@@ -239,6 +240,7 @@ struct JSONParseState
 		ret.stackLength = 0;
 		ret.line = 0;
 		ret.index = 0;
+		ret.lineStartIndex = 0;
 		ret.totalParsedIndex = 0;
 		ret.partial = StringBuffer.get();
 		ret.getNextStringFn = null;
@@ -479,7 +481,7 @@ struct JSONParseState
 	private string getErr(string err="", string f = __FILE_FULL_PATH__, size_t l = __LINE__)
 	{
 		import std.conv:to;
-		return "Error at line "~line.to!string~" "~err~" on index '"~totalParsedIndex.to!string~"' last parsed: "~lastValue.toString~" [Internal: "~f~":"~l.to!string~"]";
+		return "Error at line "~line.to!string~" "~err~" on index '"~(totalParsedIndex+index -lineStartIndex).to!string~"' last parsed: "~lastValue.toString~" [Internal: "~f~":"~l.to!string~"]";
 	}
 
 	private bool getNextLiteral(const char[] data, ptrdiff_t currentIndex, out ptrdiff_t newIndex, out JSONValue value)
@@ -765,7 +767,7 @@ struct JSONValue
 				char ch = data[index];
 				switch(ch)
 				{
-					case '\n': line++; break;
+					case '\n': line++; lineStartIndex = index+totalParsedIndex; break;
 					case ' ', '\r', '\t': break;
 					case '{':
 					{
