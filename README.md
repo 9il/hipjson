@@ -41,7 +41,7 @@ void main()
         }
     }};
 
-    JSONValue v = parseJSON(jsonSource);
+    JSONValue v = parseJSON(jsonSource, true); //Since v1.0.5, you can optionally pass a true argument for borrowing the strings, so they aren't allocated in the GC.
 }
 
 ///Mutating and creating the DOM
@@ -49,7 +49,7 @@ void main()
 void main()
 {
     JSONValue m = JSONValue.emptyObject;
-    m["someKey] = JSONValue(500);
+    m["someKey"] = JSONValue(500);
     m["here"] = 500;
     import std.stdio;
     writeln = m.toString;

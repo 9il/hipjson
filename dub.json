@@ -32,7 +32,7 @@
 	],
 	"copyright": "Copyright © 2023 - 2025, Hipreme",
 	"dependencies": {
-		"d-segmented-hashmap": "~>1.0.6"
+		"d-segmented-hashmap": "~>1.0.7"
 	},
 	"description": "A high performance implementation of a DOM JSON parser with std.json syntax and SIMD. Used by Redub and Hipreme Engine",
 	"license": "MIT",

@@ -1,9 +1,16 @@
 module hip.data.json;
 import hip.util.shashmap;
 
-JSONValue parseJSON(const(char)[] jsonData)
+/**
+ *
+ * Params:
+ *   jsonData = The json data to read
+ *   borrowStrings = If true, the string pool size is reduced to 25% of the input length, and the strings are store by reference instead of a new GC copy. This option is ignored if SIMD is unavailable
+ * Returns: A completely parsed JSON. Incomplete streams are treated as error. Check for errors with `json.hasErrorOccurred` and `json.error`
+ */
+JSONValue parseJSON(const(char)[] jsonData, bool borrowStrings = false)
 {
-    JSONParseState state = JSONParseState.initialize(jsonData.length);
+    JSONParseState state = JSONParseState.initialize(jsonData.length, borrowStrings);
 	JSONValue output;
 	if(JSONValue.parseStream(output, state, jsonData, true) == JSONValue.IncompleteStream)
 		return JSONValue.errorObj("Incomplete stream when trying to parse complete JSONValue.");
@@ -212,11 +219,12 @@ struct JSONParseState
 		ptrdiff_t totalParsedIndex;
 		string lastKey;
 		StringBuffer partial;
+		bool borrowStrings;
 	}
 
 	private extern(C) bool function(JSONParseState* this_, const char[] data, ptrdiff_t startIndex, out ptrdiff_t newIndex, out string theString) @trusted getNextStringFn;
 
-	static JSONParseState initialize(size_t dataLength = 0) @trusted
+	static JSONParseState initialize(size_t dataLength = 0, bool borrowStrings = false) @trusted
 	{
 		import std.array;
 		import core.cpuid;
@@ -225,7 +233,8 @@ struct JSONParseState
 		ret.current = &ret.main;
 		ret.state = JSONState.value;
 		ret.lastValue = ret.main;
-		ret.pool = StringPoolList(dataLength <= minStringPoolSize ? minStringPoolSize : cast(size_t)(dataLength*0.5));
+		float poolFactor = borrowStrings ? 0.25 : 0.5;
+		ret.pool = StringPoolList(dataLength <= minStringPoolSize ? minStringPoolSize : cast(size_t)(dataLength*poolFactor));
 		ret.stack = uninitializedArray!(JSONValue[])(32);
 		ret.stackLength = 0;
 		ret.line = 0;
@@ -233,6 +242,7 @@ struct JSONParseState
 		ret.totalParsedIndex = 0;
 		ret.partial = StringBuffer.get();
 		ret.getNextStringFn = null;
+		ret.borrowStrings = borrowStrings;
 
 		static if(HasAVX2)
 		{
@@ -357,10 +367,18 @@ struct JSONParseState
 				{
 					i+= quoteOffset;
 					returnLength+= quoteOffset;
-					ret = pool.resizeString(ret, returnLength);
-					ret[copied..returnLength] = data[startOffset.. i];
+					if(copied == 0 && borrowStrings)
+					{
+						ret = pool.resizeString(ret, 0);
+						theString = cast(string)data[startOffset.. i];
+					}
+					else
+					{
+						ret = pool.resizeString(ret, returnLength);
+						ret[copied..returnLength] = data[startOffset.. i];
+						theString = cast(string)ret;
+					}
 					newIndex = i;
-					theString = cast(string)ret;
 					return true;
 				}
 				i+= SimdOps;
@@ -1462,7 +1480,7 @@ unittest
 	string file = readText(path);
 	auto res = benchmark!(()
 	{
-		parseJSON(file);
+		auto js = parseJSON(file, true);
 	})(tests);
 
 	size_t bytesRead = file.length * tests;
