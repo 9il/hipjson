@@ -117,12 +117,14 @@ HipJSON: 78 ms, 604 μs, and 5 hnsecs (50000 Tests)
 ```
 
 #### Target = Apple M4
+```
 STD JSON: 340 ms, 500 μs, and 7 hnsecs (50000 Tests) 
 JSONPIPE: 239 ms and 89 μs (50000 Tests)
 Mir Ion Algebraic: 234 ms, 974 μs, and 3 hnsecs (50000 Tests) 
 Mir Ion Amazon   : 98 ms, 492 μs, and 8 hnsecs (50000 Tests) 
 Mir ASDF         : 22 ms, 389 μs, and 9 hnsecs (50000 Tests) 
 HipJSON: 85 ms, 877 μs, and 9 hnsecs (50000 Tests) 
+```
 
 HipJSON is currently optimized with d-segmented-hashmap, which makes it get a much faster parsing speed as it never rehashes its dictionaries.
 It also has a string buffer performance optimization which makes it even faster when you're dealing with mostly strings.
